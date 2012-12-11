@@ -10,6 +10,7 @@
 #include <iostream>
 using namespace std;
 
+#include <openssl/rand.h>
 #include <openssl/ssl.h>	// Secure Socket Layer library
 #include <openssl/bio.h>	// Basic Input/Output objects for SSL
 #include <openssl/rsa.h>	// RSA algorithm etc
@@ -94,11 +95,14 @@ int main(int argc, char** argv)
 	printf("2.  Sending challenge to the server...");
         cout << endl << "CLIENT STEP 2. " << endl;        
         string randomNumber="31337";
-        char buffs[BUFFER_SIZE];
-        memcpy(buffs, randomNumber.c_str(), BUFFER_SIZE);
-        SSL_write(ssl, buffs, BUFFER_SIZE); 
+        unsigned char buffs[5];
+        RAND_bytes(buffs,sizeof(buffs));
+        //Copying the randomNumber into a buffer of size BUFFER_SIZE = 1024
+        //memcpy(buffs, randomNumber.c_str(), BUFFER_SIZE);
+        //Writing the buffer into the ssl stream 
+        SSL_write(ssl, buffs, sizeof(buffs)); 
         printf("SUCCESS.\n");
-	printf("    (Challenge sent: \"%s\")\n", randomNumber.c_str());
+	printf("    (Challenge sent: \"%s\")\n", buff2hex(((const unsigned char*)buffs), sizeof(buffs)).c_str());
 
     //-------------------------------------------------------------------------
 	// 3a. Receive the signed key from the server
@@ -117,32 +121,45 @@ int main(int argc, char** argv)
     //-------------------------------------------------------------------------
 	// 3b. Authenticate the signed key
 	printf("3b. Authenticating key...");
+        cout << endl << "CLIENT STEP 3b. " << endl;
+        
+        
+	char infilepubkey[] = "rsapublickey.pem";
+        unsigned char buff_to[BUFFER_SIZE];
+        //Creating a new bio object, then writing the signed key to it.
+        //Putting the rsa encrypted value into our BIO pubkey, and then decrypting the signkey, thus retrieving the SHA1 hash value from earlier, and storing that into buff_to
+	BIO *membio = BIO_new(BIO_s_mem());  
+   	int r = BIO_write(membio, signkey, BUFFER_SIZE); 
+	BIO *pubkey = BIO_new_file(infilepubkey, "r");
+	RSA *rsa = PEM_read_bio_RSA_PUBKEY(pubkey, NULL, NULL , NULL);
+	RSA_public_decrypt(RSA_size(rsa), (const unsigned char* )signkey, buff_to, rsa, RSA_PKCS1_PADDING);
+        //Generated Key contains the signature for the SHA1 hash
+	string generated_key = buff2hex((const unsigned char* ) signkey, 20);
+        //Decrypted Key contains the decrypted signature, which is the SHA1 hash
+        string decrypted_key = buff2hex((const unsigned char* ) buff_to, 20); 
 
-	//BIO_new(BIO_s_mem())
-	//BIO_write
-	//BIO_new_file
-	//PEM_read_bio_RSA_PUBKEY
-	//RSA_public_decrypt
-	//BIO_free
-	
-	string generated_key="";
-	string decrypted_key="";
-    
 	printf("AUTHENTICATED\n");
 	printf("    (Generated key: %s)\n", generated_key.c_str());
 	printf("    (Decrypted key: %s)\n", decrypted_key.c_str());
+	BIO_free(pubkey);
+        print_errors();
 
     //-------------------------------------------------------------------------
 	// 4. Send the server a file request
 	printf("4.  Sending file request to server...");
-
+        cout << endl << "CLIENT STEP 4. " << endl;
 	PAUSE(2);
-	//BIO_flush
-    //BIO_puts
-	//SSL_write
+        //Flushing the bio object to allow use of it later
+        BIO_flush(membio);
+        //Storing filename from terminal into a string
+        string fn = filename;
+        BIO_puts(membio,filename);
+        //Writing the filename into the ssl stream for server to know what file to read
+        SSL_write(ssl, filename, fn.size());
 
-    printf("SENT.\n");
+        printf("SENT.\n");
 	printf("    (File requested: \"%s\")\n", filename);
+        print_errors();
 
     //-------------------------------------------------------------------------
 	// 5. Receives and displays the contents of the file requested
