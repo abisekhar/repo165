@@ -7,7 +7,6 @@
 #include <string>
 #include <time.h>
 #include <iostream>
-
 using namespace std;
 
 #include <openssl/ssl.h>	// Secure Socket Layer library
@@ -130,7 +129,6 @@ int main(int argc, char** argv)
 	printf("SUCCESS.\n");
 	printf("    (SHA1 hash: \"%s\" (%d bytes))\n", hash_string.c_str(), mdlen);
         print_errors();
-
     //-------------------------------------------------------------------------
 	// 4. Sign the key using the RSA private key specified in the
 	//     file "rsaprivatekey.pem"
@@ -154,7 +152,6 @@ int main(int argc, char** argv)
          printf("    (Signed key length: %d bytes)\n", siglen);
          printf("    (Signature: \"%s\" (%d bytes))\n", buff2hex((const unsigned char*)signature, siglen).c_str(), siglen);
          print_errors();
-
     //-------------------------------------------------------------------------
 	// 5. Send the signature to the( client for authentication
 	printf("5. Sending signature to client for authentication...");
@@ -187,25 +184,47 @@ int main(int argc, char** argv)
     //-------------------------------------------------------------------------
 	// 7. Send the requested file back to the client (if it exists)
 	printf("7. Attempting to send requested file to client...");
-
+        cout << endl << "SERVER STEP 7. " << endl;
 	PAUSE(2);
-	//BIO_flush
-	//BIO_new_file
-	//BIO_puts(server, "fnf");
-    //BIO_read(bfile, buffer, BUFFER_SIZE)) > 0)
-	//SSL_write(ssl, buffer, bytesRead);
 
-    int bytesSent=0;
-    
+
+    	char buffer[BUFFER_SIZE];
+	memset(buffer,0, sizeof(buffer));
+        //Flushing server bio object
+        int flush_val;
+        if((flush_val = BIO_flush(server)) <= 0)
+          cout << "Flush did not work properly" << endl;
+        int bytesSent = 0;
+        int actualRead = 0;
+        int actualWritten = 0;
+
+        BIO *infile = BIO_new_file(file, "r");
+	if(infile == NULL)
+	{
+          string fnf = "file was not found\0";
+          SSL_write(ssl, fnf.c_str(), fnf.size());
+          cout << "client's requested file not found " << endl;
+	}
+	else
+	{
+          while((actualRead = BIO_read(infile, buffer, 1)) >= 1)
+          {
+	    actualWritten = SSL_write(ssl, buffer, actualRead);
+            bytesSent += actualWritten;
+          }
+	}
+
     printf("SENT.\n");
     printf("    (Bytes sent: %d)\n", bytesSent);
+    print_errors();
 
     //-------------------------------------------------------------------------
 	// 8. Close the connection
 	printf("8. Closing connection...");
 
-	//SSL_shutdown
-    //BIO_reset
+	//Shutting the ssl stream and resetting bio object to point to start of file
+        SSL_shutdown(ssl);
+        BIO_reset(infile);    
     printf("DONE.\n");
 
     printf("\n\nALL TASKS COMPLETED SUCCESSFULLY.\n");
