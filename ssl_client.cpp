@@ -160,23 +160,31 @@ int main(int argc, char** argv)
         printf("SENT.\n");
 	printf("    (File requested: \"%s\")\n", filename);
         print_errors();
-
     //-------------------------------------------------------------------------
 	// 5. Receives and displays the contents of the file requested
 	printf("5.  Receiving response from server...");
+        cout << endl << "CLIENT STEP 5. " << endl;
 
-    //BIO_new_file
-    //SSL_read
-	//BIO_write
-	//BIO_free
+        string receive = "outfile.txt";
+        BIO *outfile = BIO_new_file(receive.c_str(), "w");
+        char ofile[BUFFER_SIZE];
+        int actualRead; 
+        int read_len;
+
+        while((actualRead = SSL_read(ssl,ofile,1)) >= 1)
+        {
+          BIO_write(outfile, ofile , actualRead);
+          cout << ofile[0];   
+        }
 
 	printf("FILE RECEIVED.\n");
-
+        print_errors();
     //-------------------------------------------------------------------------
 	// 6. Close the connection
 	printf("6.  Closing the connection...");
 
-	//SSL_shutdown
+	//Shutting down the ssl stream
+	SSL_shutdown(ssl);
 	
 	printf("DONE.\n");
 	
