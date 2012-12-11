@@ -7,6 +7,7 @@
 #include <string>
 #include <time.h>
 #include <iostream>
+
 using namespace std;
 
 #include <openssl/ssl.h>	// Secure Socket Layer library
@@ -101,12 +102,13 @@ int main(int argc, char** argv)
         cout << endl << "SERVER STEP 2. " << endl;    
  
         string challenge = "";    
-        char buffs[BUFFER_SIZE]; 
+        char buffs[5]; 
+        //Reading the challenge from the ssl stream into the buffer
         int blen = SSL_read(ssl,buffs,BUFFER_SIZE);
         challenge = buffs; 
 
 	printf("DONE.\n");
-	printf("    (Challenge: \"%s\")\n", challenge.c_str());
+	printf("    (Challenge: \"%s\")\n", buff2hex((const unsigned char*)buffs, sizeof(buffs)).c_str());
         print_errors();
 
     //-------------------------------------------------------------------------
@@ -115,6 +117,7 @@ int main(int argc, char** argv)
         cout << endl << "SERVER STEP 3. " << endl;    
 
 	char mdbuf[EVP_MAX_MD_SIZE];
+        //Creating a new bio object, writing the challenge to the object, and then hashing it.
         BIO *membio = BIO_new(BIO_s_mem()); 
         BIO_write(membio, buffs, blen); 
 	BIO *hash = BIO_new(BIO_f_md()); 
@@ -138,7 +141,9 @@ int main(int argc, char** argv)
 	char infileprivkey[] = "rsaprivatekey.pem";
         int siglen = 0;
         unsigned char buff_from[128];
+        //Storing the hashed challenge into an unsigned char*
         memcpy(buff_from,mdbuf,sizeof(buff_from));
+        //Creating a bio object for a private key, and then encrypting the challenge into buff_to using the private key
 	BIO *privkey = BIO_new_file(infileprivkey, "r"); 
 	RSA *rsa = PEM_read_bio_RSAPrivateKey(privkey, NULL, NULL, NULL); 
 	siglen = RSA_private_encrypt(RSA_size(rsa)-11, buff_from, buff_to, rsa, RSA_PKCS1_PADDING);
@@ -149,13 +154,16 @@ int main(int argc, char** argv)
          printf("    (Signed key length: %d bytes)\n", siglen);
          printf("    (Signature: \"%s\" (%d bytes))\n", buff2hex((const unsigned char*)signature, siglen).c_str(), siglen);
          print_errors();
+
     //-------------------------------------------------------------------------
 	// 5. Send the signature to the( client for authentication
 	printf("5. Sending signature to client for authentication...");
         cout << endl << "SERVER STEP 5. " << endl;
-
+    
+        //Flushing bio object for use later
         char bsig[BUFFER_SIZE];        
         BIO_flush(membio); 
+        //Copying the signature to a buffer, and then writing the buffer to an ssl stream
         memcpy(bsig, signature, BUFFER_SIZE); 
         SSL_write(ssl, bsig , BUFFER_SIZE);
 
@@ -165,12 +173,16 @@ int main(int argc, char** argv)
     //-------------------------------------------------------------------------
 	// 6. Receive a filename request from the client
 	printf("6. Receiving file request from client...");
+        cout << endl << "SERVER STEP 6. " << endl;
 
-    //SSL_read
-    char file[BUFFER_SIZE];
-    memset(file,0,sizeof(file));
-    printf("RECEIVED.\n");
-    printf("    (File requested: \"%s\"\n", file);
+        char file[BUFFER_SIZE];
+        memset(file,0,sizeof(file));
+        //Reading the filename from the ssl stream and writing to a buffer
+        SSL_read(ssl,file,BUFFER_SIZE);
+
+        printf("RECEIVED.\n");
+        printf("    (File requested: \"%s\"\n", file);
+        print_errors();
 
     //-------------------------------------------------------------------------
 	// 7. Send the requested file back to the client (if it exists)
